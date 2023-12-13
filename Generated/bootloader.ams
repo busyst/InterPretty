@@ -1,0 +1,46 @@
+void InitStack()
+{
+    mov(ax, 0x9000);
+    mov(ss, ax);
+    mov(sp, 0x8000);
+}
+void LoadKernel()
+{
+    mov(ax,0);
+    mov(ds,ax);
+    mov(es,ax);
+
+    mov(bx, 0x1000);
+    mov(ah, 2);
+    mov(al, 1);
+    mov(ch, 0);
+    mov(cl, 2);
+    mov(dh, 0);    
+    inter(0x13);
+}
+
+void WriteLetter()
+{
+    mov(ah,0x0E);
+    mov(al,a);
+    inter(0x10);
+}
+
+InitStack();
+LoadKernel();
+
+int
+a = 'L';
+WriteLetter();
+a = 'o';
+WriteLetter();
+a = 'a';
+WriteLetter();
+a = 'd';
+WriteLetter();
+a = 13;
+WriteLetter();
+a = 10;
+WriteLetter();
+
+jmp(0x0000:0x1000);

@@ -1,0 +1,24 @@
+
+int a = 'A';
+int b = 'z'+1;
+
+return:
+
+WriteLetter();
+a = a + 1;
+if(a<b)
+{
+    goto return;
+}
+
+
+
+
+
+
+void WriteLetter()
+{
+    mov(ah,0x0E);
+    mov(al,a);
+    inter(0x10);
+}

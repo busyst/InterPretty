@@ -1,0 +1,8 @@
+MKERSHARP.sln
+bin/
+obj/
+.vscode/
+mkisofs.exe
+cygwin1.dll
+cygwin.ini
+MKERSHARP.csproj
