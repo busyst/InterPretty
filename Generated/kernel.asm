@@ -42,13 +42,8 @@ pop cx
 pop bx
 add bx,cx
 mov [x], bx
-mov ax, 0x0C13
-mov cx, [x]
-mov dx, [y]
-mov al, [c]
-int 0x10
 mov bx, [x]
-mov cx, 319
+mov cx, 320
 cmp bx,cx
 jle _C0
 mov word [x], 0
@@ -59,16 +54,21 @@ pop bx
 add bx,cx
 mov [y], bx
 mov bx, [y]
-mov cx, 199
+mov cx, 200
 cmp bx,cx
 jle _C1
 mov word [y], 0
+_C1:
 push word [c]
 push word 1
 pop cx
 pop bx
 add bx,cx
 mov [c], bx
-_C1:
 _C0:
+mov ax, 0x0C13
+mov cx, [x]
+mov dx, [y]
+mov al, [c]
+int 0x10
 jmp return

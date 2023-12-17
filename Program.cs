@@ -1,4 +1,6 @@
-﻿var terr = @"C:\Users\JD\Desktop\MKERSHARP\Generated\";
+﻿using System.Diagnostics;
+
+var terr = @"C:\Users\JD\Desktop\MKERSHARP\Generated\";
 
 
 Bootloader bootloader = new Bootloader($"{terr}bootloader.ams",$"{terr}bootloader.asm",$"{terr}bootloader.bin");
@@ -27,7 +29,16 @@ class OS(Bootloader bootloader,Kernel kernel,string rawFile) : IDisposable
 {
     public void CompileRun()
     {
-        File.Delete(rawFile);
+        try
+        {
+            File.Delete(rawFile);
+        }catch{
+            foreach (var process in Process.GetProcessesByName("qemu-system-x86_64"))
+            {
+                process.Kill();
+            }
+            File.Delete(rawFile);
+        }
         using var os = File.Create(rawFile);
         os.Write(File.ReadAllBytes(bootloader.bootBIN));
         os.Write(File.ReadAllBytes(kernel.kernelBIN));

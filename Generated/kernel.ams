@@ -47,18 +47,16 @@ SetVideoMode();
 DrawPixel();
 
 return:
-x = x + 1; 
-DrawPixel();
-if(x>319)
+x = x + 1;
+if(x>320)
 {
-
     x = 0;
     y = y + 1;
-    if(y > 199)
+    if(y > 200)
     {
         y = 0;
-        c = c + 1;
     }
-
+    c = c + 1;
 }
+DrawPixel();
 goto return;
