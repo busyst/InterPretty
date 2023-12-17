@@ -1,30 +1,74 @@
+[BITS 16]
 section .data
-  a dd 0
-  b dd 0
+  x:dw 0
+  y:dw 0
+  c:db 0
+  a:db 0
 section .text
 global _start
 _start:
-mov dword [a],65
-push word 122
-push word 1
-pop bx
-pop ax
-add ax,bx
-mov [b],ax
-return:
+mov word [x], 0
+mov word [y], 0
+mov byte [c], 12
 mov ah, 0x0E
-mov al, [a]
+mov byte [a], 84
+mov al, byte [a]
 int 0x10
-push word [a]
+mov byte [a], 111
+mov al, byte [a]
+int 0x10
+mov ah, 0
+int 0x16
+mov ah, 0x0E
+mov byte [a], 111
+mov al, byte [a]
+int 0x10
+mov byte [a], 107
+mov al, byte [a]
+int 0x10
+mov ah, 0
+int 0x16
+mov ax, 0x0013
+int 0x10
+mov ax, 0x0C13
+mov cx, [x]
+mov dx, [y]
+mov al, [c]
+int 0x10
+return:
+push word [x]
 push word 1
+pop cx
 pop bx
-pop ax
-add ax,bx
-mov [a],ax
-mov ax,[a]
-mov bx,[b]
-cmp ax,bx
-jge _C0
-jmp return
+add bx,cx
+mov [x], bx
+mov ax, 0x0C13
+mov cx, [x]
+mov dx, [y]
+mov al, [c]
+int 0x10
+mov bx, [x]
+mov cx, 319
+cmp bx,cx
+jle _C0
+mov word [x], 0
+push word [y]
+push word 1
+pop cx
+pop bx
+add bx,cx
+mov [y], bx
+mov bx, [y]
+mov cx, 199
+cmp bx,cx
+jle _C1
+mov word [y], 0
+push word [c]
+push word 1
+pop cx
+pop bx
+add bx,cx
+mov [c], bx
+_C1:
 _C0:
-
+jmp return

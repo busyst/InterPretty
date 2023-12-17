@@ -1,24 +1,64 @@
-
-int a = 'A';
-int b = 'z'+1;
-
-return:
-
-WriteLetter();
-a = a + 1;
-if(a<b)
-{
-    goto return;
-}
-
-
-
-
-
-
-void WriteLetter()
+void BeginWriting()
 {
     mov(ah,0x0E);
-    mov(al,a);
+}
+void WriteLetter()
+{
+    mov(al,(byte)a);
     inter(0x10);
 }
+void WaitForKeyPress()
+{
+    mov(ah, 0);
+    inter(0x16);
+}
+void SetVideoMode()
+{
+    // Set video mode 13h (320x200, 256 colors)
+    mov(ax, 0x0013); // 13h (320x200, 256 colors), 3 (text mode)
+    inter(0x10);
+}
+void DrawPixel()
+{
+    mov(ax, 0x0C13);  // AH = 0Ch (plot pixel), AL = color (13), CX = x, DX = y
+    mov(cx, x);
+    mov(dx, y);
+    mov(al, c);
+    inter(0x10);
+}
+short x = 0;
+short y = 0;
+byte c = 12;
+BeginWriting();
+byte
+a = 'T';
+WriteLetter();
+a = 'o';
+WriteLetter();
+WaitForKeyPress();
+BeginWriting();
+a = 'o';
+WriteLetter();
+a = 'k';
+WriteLetter();
+
+WaitForKeyPress();
+SetVideoMode();
+DrawPixel();
+
+return:
+x = x + 1; 
+DrawPixel();
+if(x>319)
+{
+
+    x = 0;
+    y = y + 1;
+    if(y > 199)
+    {
+        y = 0;
+        c = c + 1;
+    }
+
+}
+goto return;

@@ -16,6 +16,7 @@ enum TokenType{
     COLON,
     SEMICOLON,
     MODIFIER,
+    PREPROCES,
     EOF_TOKEN
 };
 class Token
@@ -54,6 +55,11 @@ class Lexer(string input)
                 Advance();
                 return CreateToken(TokenType.MULTIPLY, "");
             case '/':
+                if(Peek()=='/')
+                {
+                    while (Advance()!='\n'){}
+                    return null;
+                }
                 Advance();
                 return CreateToken(TokenType.DIVIDE, "");
             case '(':
@@ -105,6 +111,8 @@ class Lexer(string input)
                 }
                 Advance();
                 return CreateToken(TokenType.NUMBER,$"{(int)chars[0]}");
+            case '#':
+                return LexPreproces();
             default:
                 if (char.IsAsciiLetter(current) || current == '_') 
                     return LexName();
@@ -160,5 +168,16 @@ class Lexer(string input)
             }
         }
         return CreateToken(TokenType.NUMBER, buffer);
+    }
+    private Token LexPreproces(){
+        string buffer = string.Empty;
+        while (char.IsAsciiLetter(Peek()) || Peek() == '_' || Peek()=='#') {
+            buffer += Advance();
+            if (buffer.Length>63) {
+                System.Console.WriteLine("Name is too long:{0}",buffer);
+                return CreateToken(TokenType.EOF_TOKEN, "");
+            }
+        }
+        return CreateToken(TokenType.PREPROCES, buffer);
     }
 }

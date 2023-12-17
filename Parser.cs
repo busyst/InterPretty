@@ -35,17 +35,6 @@ class Parser(List<Token> tokens)
                 ttp.Add(tokens[pointer]);
             pointer++;
         }
-        if(ttp.Count == 0)
-            function.inputTypes = [];
-        else
-        {
-            List<Variable> vars = new List<Variable>();
-            for (int i = 0; i < ttp.Count; i+=2)
-            {
-                vars.Add(new Variable(){name = ttp[i+1].lexeme,type = Variable.VTFromString(ttp[i].lexeme)});
-            }
-            function.inputTypes = vars;
-        }
         ttp.Clear();
         pointer+=2;
         parens = 1;
@@ -81,6 +70,10 @@ class Parser(List<Token> tokens)
         if(ttp.Count>1)
         {
             AssignTo(pc,ttp,-1);
+        }
+        else
+        {
+            pc.instructions.Add(new Instruction(){instructionType = InstructionType.OPERATION,args = [tokens[pos+1],new Token(){type = TokenType.NUMBER,lexeme = "0"}]});
         }
         return pointer-pos-2;
     }
@@ -159,7 +152,7 @@ class Parser(List<Token> tokens)
             ttp.Add(tokens[pointer]);
             pointer++;
         }
-        string label = $"_C{Counter}";
+        string label = $"_C{Counter++}";
         var tre = new List<Token>();
         tre.Add(new Token(){type = TokenType.NAME,lexeme = label});
         tre.AddRange(ttp);
@@ -176,6 +169,8 @@ class Parser(List<Token> tokens)
                 if(parens == 0)
                     break;
             }
+            if(tokens[pointer].type == TokenType.OPEN_BRACE)
+                parens++;
             ttp.Add(tokens[pointer]);
             pointer++;
         }
@@ -190,6 +185,22 @@ class Parser(List<Token> tokens)
 
     public void Parse(in ParseFunction function)
     {
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if(tokens[i].type == TokenType.NAME&&tokens[i].lexeme == "while")
+            {
+                tokens[i].type = TokenType.IF;
+                tokens[i].lexeme=  "";
+            }
+            if(tokens[i].type == TokenType.OPEN_PAREN&&tokens[i+1].type == TokenType.NAME&&tokens[i+2].type == TokenType.CLOSE_PAREN)
+            {
+                tokens.Insert(i,new Token(){type = TokenType.MODIFIER,lexeme = tokens[i+1].lexeme});
+                tokens.RemoveAt(i+1);
+                tokens.RemoveAt(i+1);
+                tokens.RemoveAt(i+1);
+            }
+        }
+
         List<TokenType> buffer = [];
         while(i < tokens.Count)
         {

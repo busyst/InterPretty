@@ -8,7 +8,6 @@ enum InstructionType{
     CREATE_VARIABLE,
     OPERATION,
     CALL_FUNCTION,
-    FUNCTION,
     CREATE_JP,
     CONDITION,
     JUMP_TO,

@@ -1,21 +1,16 @@
 class Function
 {
     public readonly string name = "";
-    public readonly Dictionary<string,Variable> vars = [];
     public readonly Dictionary<string,ParseFunction> functions = [];
     public readonly Instruction[] instructions = [];
-    public Function(string name, Variable[] inputTypes, ParseFunction[] functions, Instruction[] instructions)
+    public Function(string name, ParseFunction[] functions, Instruction[] instructions)
     {
         this.name = name;
-        Dictionary<string,Variable> vars = [];
-        foreach (var x in inputTypes)
-            vars.Add(x.name,x);
         
         Dictionary<string,ParseFunction> funcs = [];
         foreach (var x in functions)
             funcs.Add(x.name,x);
         
-        this.vars = vars;
         this.functions = funcs;
         this.instructions = instructions;
     }
@@ -23,10 +18,9 @@ class Function
 class ParseFunction
 {
     public string name = "";
-    public List<Variable> inputTypes = [];
     public List<ParseFunction> functions = [];
     public List<Instruction> instructions = [];
-    public Function ToFunc()=>new Function(name,inputTypes.ToArray(),functions.ToArray(),instructions.ToArray());
+    public Function ToFunc() => new Function(name,functions.ToArray(),instructions.ToArray());
 }
 public class Variable
 {

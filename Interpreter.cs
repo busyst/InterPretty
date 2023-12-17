@@ -1,8 +1,8 @@
 public static class IS
 {
     public static readonly string Mode = "16";
-    public static readonly string PrimaryRegister = "ax";
-    public static readonly string ScratchRegister = "bx";
+    public static readonly string PrimaryRegister = "bx";
+    public static readonly string ScratchRegister = "cx";
 
     // Arithmetic instructions
     public static string AddInstruction() => $"add {PrimaryRegister},{ScratchRegister}";
@@ -35,8 +35,8 @@ public static class IS
     public static string RetInstruction() => "ret";
     
     // Generate assignment instruction
-    public static string Assign(string destination, string source) => $"mov {destination},{source}";
-    public static string Assign(Variable destination, string source) => $"mov {(destination.StringType)} [{destination.name}],{source}";
+    public static string Assign(string destination, string source) => $"mov {destination}, {source}";
+    public static string Assign(Variable destination, string source) => $"mov {destination.StringType} [{destination.name}], {source}";
 }
 
 
@@ -51,14 +51,16 @@ class Interpreter(Function function)
     private Dictionary<string,Variable> data = [];
     private string main = string.Empty;
     public void AddLine(string str) => main += str + '\n';
-    private static string GetVarOrConst(Token t)
+    private string GetVarOrConst(Token t)
     {
         if(t.type == TokenType.NUMBER)
             return t.lexeme;
         if(char.IsDigit(t.lexeme[0]))
             return t.lexeme;
+        else if(t.type == TokenType.NAME&&data.TryGetValue(t.lexeme,out var variable))
+            return $"[{variable.name}]";
         else
-            return $"[{t.lexeme}]";
+            throw new ArgumentException("WTF?");
     }
     
     private void HandleCreation(Instruction instruction)
@@ -78,10 +80,8 @@ class Interpreter(Function function)
         }
         else
         {
-            // Do RPN here
             RPN(ttp,data[name]);
         }
-        
     }
     void RPN(List<Token> tokens,Variable variable)
     {
@@ -169,9 +169,8 @@ class Interpreter(Function function)
                 arg+=$"[{args[i].lexeme}]";
             else if(args[i].type == TokenType.MODIFIER)
             {
-                throw new NotImplementedException();
-                //arg+="word ";
-                //continue;
+                arg+=$"{Variable.VTToType(Variable.VTFromString(args[i].lexeme))} ";
+                continue;
             }
             else
                 arg+=args[i].lexeme;
@@ -184,17 +183,23 @@ class Interpreter(Function function)
             case "cld":
                 AddLine($"cld");
                 break;
+            case "cli":
+                AddLine($"cli");
+                break;
             case "inter":
                 AddLine($"int {arg}");
                 break;
             case "mov":
                 AddLine($"mov {arg}");
                 break;
+            case "movzx":
+                AddLine($"movzx {arg}");
+                break;
             case "jmp":
                 if(args.Count ==2)
                     AddLine($"jmp {args[1].lexeme}");
                 else
-                    AddLine($"jmp {args[1].lexeme}:{args[3].lexeme}");
+                    AddLine($"jmp {GetVarOrConst(args[1])}:{GetVarOrConst(args[3])}");
                     
                 break;
             default:
@@ -204,20 +209,6 @@ class Interpreter(Function function)
                 }
                 break;
         }
-    }
-    int HandleNewFunction(Instruction instruction,int pos)
-    {
-        var args = instruction.args;
-        var name = args[1].lexeme;
-        var To = int.Parse(args[0].lexeme);
-        Instruction[] _loc  = new Instruction[To-pos-1];
-        for (int i = pos+1; i < To; i++)
-        {
-            _loc[i-pos-1] = function.instructions[i];
-        }
-        //functions.Add(name,new Function(){instructions = _loc});
-
-        return To-1;
     }
     public void Interpret()
     {
@@ -240,9 +231,6 @@ class Interpreter(Function function)
                 case InstructionType.CALL_FUNCTION:
                     HandleFunction(instructions[i],i);
                     break;
-                case InstructionType.FUNCTION:
-                    i = HandleNewFunction(instructions[i],i);
-                    break;
                 case InstructionType.CREATE_JP:
                     AddLine(instructions[i].args[0].lexeme+':');
                     break;
@@ -254,20 +242,17 @@ class Interpreter(Function function)
             }
         }
         output+= bootloader?"[org 0x7C00]\n":"";
-        output+= bootloader?$"[BITS {IS.Mode}]\n":"";
+        output+= true?$"[BITS {IS.Mode}]\n":"";
         output+= "section .data\n";
         var emn = data.AsEnumerable().ToArray();
         for (int i = 0; i < data.Count; i++)
         {
-            output+= $"  {emn[i].Key} {emn[i].Value.StringShortType} 0\n";
+            output+= $"  {emn[i].Key}:{emn[i].Value.StringShortType} 0\n";
         }
         output+= "section .text\n";
         output+= "global _start\n";
         output+= "_start:\n";
-        output+= main+'\n';
-        //output+= bootloader?"jmp $\n":"";
-        output+= bootloader?"times 510-($-$$) db 0\n":"";
-        output+= bootloader?"dw 0xAA55\n":"";
+        output+= main;
     }
 
 }
