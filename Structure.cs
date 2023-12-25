@@ -1,29 +1,6 @@
-class Function
-{
-    public readonly string name = "";
-    public readonly Dictionary<string,ParseFunction> functions = [];
-    public readonly Instruction[] instructions = [];
-    public Function(string name, ParseFunction[] functions, Instruction[] instructions)
-    {
-        this.name = name;
-        
-        Dictionary<string,ParseFunction> funcs = [];
-        foreach (var x in functions)
-            funcs.Add(x.name,x);
-        
-        this.functions = funcs;
-        this.instructions = instructions;
-    }
-}
-class ParseFunction
-{
-    public string name = "";
-    public List<ParseFunction> functions = [];
-    public List<Instruction> instructions = [];
-    public Function ToFunc() => new Function(name,functions.ToArray(),instructions.ToArray());
-}
 public class Variable
 {
+    public bool array = false;
     public string name;
     public VariableType type;
     public string StringType => VTToType(type);
@@ -45,6 +22,14 @@ public class Variable
         VariableType.LONG => "qword",
         _ => throw new ArgumentException("Invalid variableType"),
     };
+    public static bool isType(string str) => str switch
+    {
+        "byte"=>true,
+        "short"=>true,
+        "int"=>true,
+        "long"=>true,
+        _ => false,
+    };
     public static string VTToShortType(VariableType variableType) => variableType switch
     {
         VariableType.BYTE => "db",
@@ -53,8 +38,25 @@ public class Variable
         VariableType.LONG => "dq",
         _ => throw new ArgumentException("Invalid variableType"),
     };
+    public static string VTToPrimaryRegister(VariableType variableType) => variableType switch
+    {
+        VariableType.BYTE => "al",
+        VariableType.SHORT => "ax",
+        VariableType.INT => "eax",
+        VariableType.LONG => "rax",
+        _ => throw new ArgumentException("Invalid variableType"),
+    };
+    public static string VTToSecondaryRegister(VariableType variableType) => variableType switch
+    {
+        VariableType.BYTE => "dl",
+        VariableType.SHORT => "dx",
+        VariableType.INT => "edx",
+        VariableType.LONG => "rdx",
+        _ => throw new ArgumentException("Invalid variableType"),
+    };
+    public static VariableType MaxReg(VariableType va1,VariableType va2) => (VariableType)Math.Max((byte)va1,(byte)va2);
 }
-public enum VariableType
+public enum VariableType : byte
 {
     BYTE,SHORT,INT,LONG
 }

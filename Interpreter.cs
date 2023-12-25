@@ -1,258 +1,205 @@
+using System.Collections;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+
 public static class IS
 {
     public static readonly string Mode = "16";
-    public static readonly string PrimaryRegister = "bx";
-    public static readonly string ScratchRegister = "cx";
-
-    // Arithmetic instructions
-    public static string AddInstruction() => $"add {PrimaryRegister},{ScratchRegister}";
-    public static string SubInstruction() => $"sub {PrimaryRegister},{ScratchRegister}";
-    public static string MulInstruction() => $"imul {PrimaryRegister},{ScratchRegister}";
-    public static string DivInstruction() => $"div {ScratchRegister}";
-
-    // Comparison instructions
-    public static string CmpInstruction(string operand1, string operand2) => $"cmp {operand1},{operand2}";
-    public static string JmpInstruction(string label) => $"jmp {label}";
-    public static string JeInstruction(string label) => $"je {label}";
-    public static string JneInstruction(string label) => $"jne {label}";
-    public static string JgInstruction(string label) => $"jg {label}";
-    public static string JgeInstruction(string label) => $"jge {label}";
-    public static string JlInstruction(string label) => $"jl {label}";
-    public static string JleInstruction(string label) => $"jle {label}";
-
-    // Bitwise instructions
-    public static string AndInstruction(string operand1, string operand2) => $"and {operand1},{operand2}";
-    public static string OrInstruction(string operand1, string operand2) => $"or {operand1},{operand2}";
-    public static string XorInstruction(string operand1, string operand2) => $"xor {operand1},{operand2}";
-    public static string NotInstruction(string operand) => $"not {operand}";
-
-    // Shift instructions
-    public static string LeftShiftInstruction(string operand, int count) => $"shl {operand},{count}";
-    public static string RightShiftInstruction(string operand, int count) => $"shr {operand},{count}";
-
-    // Other instructions
-    public static string CallInstruction(string functionName) => $"call {functionName}";
-    public static string RetInstruction() => "ret";
-    
-    // Generate assignment instruction
-    public static string Assign(string destination, string source) => $"mov {destination}, {source}";
-    public static string Assign(Variable destination, string source) => $"mov {destination.StringType} [{destination.name}], {source}";
 }
-
-
-
-
-class Interpreter(Function function)
+class Interpreter(Class[] _classes)
 {
-    private List<Instruction> instructions = function.instructions.ToList(); 
     public static bool bootloader = false;
-    public int counter = 0;
-    public string output = string.Empty;
-    private Dictionary<string,Variable> data = [];
-    private string main = string.Empty;
-    public void AddLine(string str) => main += str + '\n';
-    private string GetVarOrConst(Token t)
+
+    private Queue<Instruction> instructionBuffer = [];
+    private readonly StringBuilder main = new StringBuilder();
+
+    private readonly Dictionary<string,Variable> data = [];
+    private Class GetClass(string name)
     {
-        if(t.type == TokenType.NUMBER)
-            return t.lexeme;
-        if(char.IsDigit(t.lexeme[0]))
-            return t.lexeme;
-        else if(t.type == TokenType.NAME&&data.TryGetValue(t.lexeme,out var variable))
-            return $"[{variable.name}]";
-        else
-            throw new ArgumentException("WTF?");
+        var _class = _classes.FirstOrDefault((x)=>x.name==name);
+        if(_class!=null)
+            return _class;
+        throw new ArgumentException($"Class \"{name}\" dont exist");
     }
-    
+    private Variable GetVariable(string className,string name)
+    {
+        var _name = $"{className}_{name}";
+        if(data.ContainsKey(_name))
+            return data[_name];
+        throw new ArgumentException($"Class \"{name}\" dont exist");
+    }
+    private static bool isNumber(string s) =>char.IsNumber(s[0]);
+    private void AddLine(string str) => main.AppendLine('\t' + str);
+
     private void HandleCreation(Instruction instruction)
     {
-        var type = Variable.VTFromString(instruction.args[0].lexeme);
-        var name = instruction.args[1].lexeme;
+        var callingFrom = instruction.args[0];
+        var type = Variable.VTFromString(instruction.args[1]);
+        var name = callingFrom +'_'+ instruction.args[2];
         data.Add(name,new Variable(){name = name,type = type});
     }
     private void HandleOperation(Instruction instruction)
     {
-        var name = instruction.args[0].lexeme;
-        List<Token> ttp = [];
-        for (int i = 1; i < instruction.args.Count; i++)
-            ttp.Add(instruction.args[i]);
-        if(ttp.Count == 1){
-            AddLine(IS.Assign(data[name], GetVarOrConst(ttp[0])));
-        }
-        else
+        var callingFrom = instruction.args[0];
+        var callingTo = instruction.args[1];
+        var name = instruction.args[2];
+        var expresion = instruction.args.AsSpan(3);
+        var variable = GetVariable(callingTo,name);
+        switch (expresion.Length)
         {
-            RPN(ttp,data[name]);
-        }
-    }
-    void RPN(List<Token> tokens,Variable variable)
-    {
-        List<Token> Result = [];
-        Stack<Token> stack = [];
-        static bool isOperation(Token token) => token.type == TokenType.PLUS || token.type == TokenType.MINUS || token.type == TokenType.MULTIPLY || token.type == TokenType.DIVIDE || (token.type == TokenType.SPECIAL_SYMBOL && (token.lexeme[0] == '&' || token.lexeme[0] == '|'|| token.lexeme[0] == '^'));
-        for (int i = 0; i < tokens.Count; i++)
-        {
-            if(isOperation(tokens[i]))
-                stack.Push(tokens[i]);
-            else if(tokens[i].type == TokenType.OPEN_PAREN)
-                stack.Push(tokens[i]);
-            else if(tokens[i].type == TokenType.CLOSE_PAREN)
-            {
-                while (true)
-                {
-                    var token = stack.Pop();
-                    if(token.type == TokenType.OPEN_PAREN)
-                        break;
-                    Result.Add(token);
-                }
-            }
-            else
-                Result.Add(tokens[i]);
-        }
-        while (stack.Count!=0)
-        {
-            Result.Add(stack.Pop());
-        }
-        foreach (var x in Result)
-            if(!isOperation(x))
-                AddLine($"push word {GetVarOrConst(x)}");
-            else
-            {
-                var operation = x;
-                AddLine($"pop {IS.ScratchRegister}");
-                AddLine($"pop {IS.PrimaryRegister}");
-                switch (operation.type)
-                {
-                    case TokenType.PLUS:
-                        AddLine(IS.AddInstruction());
-                        break;
-                    case TokenType.MINUS:
-                        AddLine(IS.SubInstruction());
-                        break;
-                    case TokenType.MULTIPLY:
-                        AddLine(IS.MulInstruction());
-                        break;
-                    case TokenType.DIVIDE:
-                        AddLine(IS.DivInstruction());
-                        break;
-                }
-            }
-        AddLine(IS.Assign($"[{variable.name}]",IS.PrimaryRegister));
-    }
-    private void HandleCondition(Instruction instruction,int to)
-    {
-        var labelName = instruction.args[0].lexeme;
-        var first = instruction.args[1];
-        var operation = instruction.args[2].lexeme;
-        var second = instruction.args[3];
-
-
-        AddLine(IS.Assign(IS.PrimaryRegister,GetVarOrConst(first)));
-        AddLine(IS.Assign(IS.ScratchRegister,GetVarOrConst(second)));
-        AddLine(IS.CmpInstruction(IS.PrimaryRegister,IS.ScratchRegister));
-        switch (operation[0])
-        {
-            case '>':
-                AddLine($"jle {labelName}");
-                break;
-            case '<':
-                AddLine($"jge {labelName}");
-                break;
-        }
-    }
-    void HandleFunction(Instruction instruction,int poi)
-    {
-        var args = instruction.args;
-        var first = args[0].lexeme;
-        string arg = string.Empty; 
-        for (int i = 1; i < args.Count; i++)
-        {
-            if(data.ContainsKey(args[i].lexeme))
-                arg+=$"[{args[i].lexeme}]";
-            else if(args[i].type == TokenType.MODIFIER)
-            {
-                arg+=$"{Variable.VTToType(Variable.VTFromString(args[i].lexeme))} ";
-                continue;
-            }
-            else
-                arg+=args[i].lexeme;
-            
-            if(i!=args.Count-1)
-                arg+=", ";
-        }
-        switch (first)
-        {
-            case "cld":
-                AddLine($"cld");
-                break;
-            case "cli":
-                AddLine($"cli");
-                break;
-            case "inter":
-                AddLine($"int {arg}");
-                break;
-            case "mov":
-                AddLine($"mov {arg}");
-                break;
-            case "movzx":
-                AddLine($"movzx {arg}");
-                break;
-            case "jmp":
-                if(args.Count ==2)
-                    AddLine($"jmp {args[1].lexeme}");
+            case 1:
+                if(isNumber(expresion[0]))
+                    AddLine($"mov {variable.StringType} [{variable.name}], {expresion[0]}");
                 else
-                    AddLine($"jmp {GetVarOrConst(args[1])}:{GetVarOrConst(args[3])}");
-                    
-                break;
-            default:
-                if(function.functions.TryGetValue(first, out ParseFunction value))
                 {
-                    instructions.InsertRange(poi+1,value.instructions);
+                    var scv = GetVariable(callingFrom,expresion[0]);
+                    var mxr = Variable.VTToPrimaryRegister(Variable.MaxReg(scv.type,variable.type));
+                    AddLine($"mov {scv.StringType} {mxr}, [{scv.name}]");
+                    AddLine($"mov {variable.StringType} [{variable.name}],{variable.StringType} {mxr}");
                 }
                 break;
         }
+
+        System.Console.WriteLine();
+
     }
-    public void Interpret()
+    private void HandleCall(Instruction instruction)
     {
-        for (int i = 0; i < instructions.Count; i++)
+        var callingFrom = instruction.args[0];
+        var callingTo = instruction.args[1];
+        var name = instruction.args[2];
+        var instructions = GetClass(callingTo).functions.First((x)=>x.name==name).instructions;
+        foreach (var x in instructions)
+            instructionBuffer.Enqueue(x);
+    }
+    private void HandleCJP(Instruction instruction)
+    {
+        string relClass = instruction.args[0];
+        string name = instruction.args[1];
+        AddLine($"{relClass}_C_{name}:");
+    }
+    private void HandleJP(Instruction instruction)
+    {
+        string relClass = instruction.args[0];
+        string name = instruction.args[1];
+        AddLine($"jmp {relClass}_C_{name}");
+    }
+    private void HandleCondition(Instruction instruction)
+    {
+        var relClass = instruction.args[0];
+        var jp = $"{relClass}_C_{instruction.args[1]}";
+        var expr = instruction.args.AsSpan(2);
+
+        (string operand, VariableType type) GetOperandInfo(string relClass, string expression)
         {
-            switch (instructions[i].instructionType)
+            if (!isNumber(expression))
             {
-                case InstructionType.NOOP:
-                    AddLine("noop");
-                    break;
+                var variable = GetVariable(relClass, expression);
+                return ($"{variable.StringType} [{variable.name}]", variable.type);
+            }
+            else
+            {
+                return (expression, VariableType.INT);
+            }
+        }
+        var (fNv, first) = GetOperandInfo(relClass, expr[0]);
+        var (sNv, second) = GetOperandInfo(relClass, expr[2]);
+
+        var max = Variable.MaxReg(first, second);
+        var rega = Variable.VTToPrimaryRegister(max);
+        var regb = Variable.VTToSecondaryRegister(max);
+        var tetf = (max == first) ? "mov" : "movzx";
+        var tets = (max == second) ? "mov" : "movzx";
+
+        AddLine($"{tetf} {rega},{fNv}");
+        AddLine($"{tets} {regb},{sNv}");
+        AddLine($"cmp {rega},{regb}");
+
+        switch (expr[1])
+        {
+            case "<":  AddLine($"jge {jp}"); break;
+            case ">":  AddLine($"jle {jp}"); break;
+            case "<=": AddLine($"jg {jp}");  break;
+            case ">=": AddLine($"jl {jp}");  break;
+            case "==": AddLine($"jne {jp}"); break;
+            case "!=": AddLine($"je {jp}");  break;
+        }
+    }
+
+
+    public string Interpret()
+    {
+        var c = GetMain();
+        List<Instruction> instructions = [];
+        foreach (var x in _classes)
+            instructions.AddRange(x.functions.First((y)=>y.name==x.name).instructions);
+        instructions.AddRange(c.instructions);
+        instructionBuffer = new Queue<Instruction>(instructions);
+        while(instructionBuffer.Count!=0)
+        {
+            var instruction = instructionBuffer.Dequeue();
+            switch (instruction.instructionType)
+            {
                 case InstructionType.CREATE_VARIABLE:
-                    HandleCreation(instructions[i]);
+                    HandleCreation(instruction);
                     break;
                 case InstructionType.OPERATION:
-                    HandleOperation(instructions[i]);
-                    break;
-                case InstructionType.CONDITION:
-                    HandleCondition(instructions[i],i);
+                    HandleOperation(instruction);
                     break;
                 case InstructionType.CALL_FUNCTION:
-                    HandleFunction(instructions[i],i);
+                    HandleCall(instruction);
                     break;
                 case InstructionType.CREATE_JP:
-                    AddLine(instructions[i].args[0].lexeme+':');
+                    HandleCJP(instruction);
                     break;
                 case InstructionType.JUMP_TO:
-                    AddLine("jmp "+instructions[i].args[0].lexeme);
+                    HandleJP(instruction);
+                    break;
+                case InstructionType.CONDITION:
+                    HandleCondition(instruction);
                     break;
                 default:
-                    break;
+                    throw new Exception("Wrong instruction!");
             }
         }
-        output+= bootloader?"[org 0x7C00]\n":"";
-        output+= true?$"[BITS {IS.Mode}]\n":"";
-        output+= "section .data\n";
-        var emn = data.AsEnumerable().ToArray();
-        for (int i = 0; i < data.Count; i++)
+        return GetCode();
+    }
+    private Function GetMain()
+    {
+        foreach (var _class in _classes)
+            foreach (var x in _class.functions)
+                if(x.name.Equals("main", StringComparison.CurrentCultureIgnoreCase))
+                    return x;
+        throw new Exception("There is no main method!");
+    }
+    private string GetCode()
+    {
+        StringBuilder outputBuilder = new StringBuilder();
+
+        AppendIfTrue(outputBuilder, bootloader, "[org 0x7C00]\n");
+        AppendIfTrue(outputBuilder, true, $"[BITS {IS.Mode}]\n");
+
+        outputBuilder.AppendLine("section .data");
+
+        foreach (var entry in data)
         {
-            output+= $"  {emn[i].Key}:{emn[i].Value.StringShortType} 0\n";
+            outputBuilder.AppendLine($"  {entry.Key}:{entry.Value.StringShortType} 0");
         }
-        output+= "section .text\n";
-        output+= "global _start\n";
-        output+= "_start:\n";
-        output+= main;
+
+        outputBuilder.AppendLine("section .text");
+        outputBuilder.AppendLine("global _start");
+        outputBuilder.AppendLine("_start:");
+        outputBuilder.Append(main);
+
+        return outputBuilder.ToString();
+    }
+
+    private static void AppendIfTrue(StringBuilder builder, bool condition, string value)
+    {
+        if (condition)
+        {
+            builder.Append(value);
+        }
     }
 
 }

@@ -1,29 +1,27 @@
 ﻿using System.Diagnostics;
-
 var terr = @"C:\Users\JD\Desktop\MKERSHARP\Generated\";
+var code = @"C:\Users\JD\Desktop\MKERSHARP\Code\";
 
-
-Bootloader bootloader = new Bootloader($"{terr}bootloader.ams",$"{terr}bootloader.asm",$"{terr}bootloader.bin");
-bootloader.Interpret();
-bootloader.Compile();
-Kernel kernel = new Kernel($"{terr}kernel.ams",$"{terr}kernel.asm",$"{terr}kernel.bin");
+Bootloader bootloader = new Bootloader($"{code}bootloader.ams",$"{terr}bootloader.asm",$"{terr}bootloader.bin");
+// /bootloader.Interpret();
+;
+Kernel kernel = new Kernel($"{code}kernel.ams",$"{terr}kernel.asm",$"{terr}kernel.bin");
 kernel.Interpret();
-kernel.Compile();
+;
 
-if (!File.Exists($"{terr}bootloader.bin") || !File.Exists($"{terr}kernel.bin"))
+if (bootloader.Compile() && kernel.Compile())
 {
-    Console.WriteLine("Error: NASM compilation failed");
-    return;
+    OS os = new(bootloader,kernel,$"{terr}os.raw");
+    os.CompileRun();
+    os.Dispose();
 }
-OS os = new(bootloader,kernel,$"{terr}os.raw");
-os.CompileRun();
-os.Dispose();
+else
+{
+    System.Console.WriteLine("Mods, crush his scull");
+    bootloader.DeleteBin();
+    kernel.DeleteBin();
+}
 //ConCom.Run(@"C:\Users\JD\Desktop\MKERSHARP\mkisofs.exe", @$"-o {terr}disk.iso -b {terr}result.raw -no-emul-boot {terr}result.raw");
-
-
-
-
-
 
 class OS(Bootloader bootloader,Kernel kernel,string rawFile) : IDisposable
 {
@@ -40,118 +38,105 @@ class OS(Bootloader bootloader,Kernel kernel,string rawFile) : IDisposable
             File.Delete(rawFile);
         }
         using var os = File.Create(rawFile);
-        os.Write(File.ReadAllBytes(bootloader.bootBIN));
-        os.Write(File.ReadAllBytes(kernel.kernelBIN));
+        os.Write(File.ReadAllBytes(bootloader.pathToBin));
+        os.Write(File.ReadAllBytes(kernel.pathToBin));
         os.Dispose();
 
         FileInfo fileInfo = new FileInfo(rawFile);
-        FileInfo BootInfo = new FileInfo(bootloader.bootBIN);
-        FileInfo KernelInfo = new FileInfo(kernel.kernelBIN);
+        FileInfo BootInfo = new FileInfo(bootloader.pathToBin);
+        FileInfo KernelInfo = new FileInfo(kernel.pathToBin);
         
-        System.Console.WriteLine($"Kernel:{KernelInfo.Length}\r\nBootloader:{BootInfo.Length}\r\nOs size:{fileInfo.Length}");
+        Console.WriteLine($"Kernel size:{KernelInfo.Length}\r\nBootloader size:{BootInfo.Length}\r\nOs size:{fileInfo.Length}");
        
-        var s = File.ReadAllBytes(kernel.kernelBIN);
-        byte[] bytes = new byte[(1024*8)-512];
-        s.CopyTo(bytes,0);
-        File.WriteAllBytes(kernel.kernelBIN,bytes);
+        byte[] bytes = new byte[1024];
+
+        byte[] buffer = new byte[512];
+        File.ReadAllBytes(bootloader.pathToBin).CopyTo  (buffer,0);
+        buffer[510] = 0x55;
+        buffer[511] = 0xAA;
+        buffer.CopyTo(bytes,0);
+        var s = File.ReadAllBytes(kernel.pathToBin);
+
+        s.CopyTo(bytes,buffer.Length);
+        File.WriteAllBytes(rawFile,bytes);
+
         ConCom.Run($@"qemu-system-x86_64 -drive file={rawFile},format=raw");
     }
 
     public void Dispose()
     {
         File.Delete(rawFile);
-        bootloader.Dispose();
-        kernel.Dispose();
+        bootloader.DeleteBin();
+        kernel.DeleteBin();
     }
 }
-class Bootloader(string input,string asmfile,string output) : IDisposable
+public abstract class CompiledCode
 {
-    public string bootBIN =>output;
-    public void Compile(){
-        ConCom.Run(@$"nasm -f bin {asmfile} -o {output}");
-        var s = File.ReadAllBytes(output);
-        byte[] bytes = new byte[512];
-        s.CopyTo(bytes,0);
-        bytes[510] = 0x0055;
-        bytes[511] = 0xAA;
-        File.WriteAllBytes(output,bytes);
-    }
+    public string pathToCode,pathToAsm,pathToBin;
 
-    public void Dispose()
+    protected CompiledCode(string pathToCode,string pathToAsm,string pathToBin)
     {
-        File.Delete(output);
+        this.pathToBin = pathToBin;
+        this.pathToCode = pathToCode;
+        this.pathToAsm = pathToAsm;
     }
 
-    public void Interpret(){
+    public virtual bool Compile()
+    {
+        try
+        {
+            ConCom.Run(@$"nasm -f bin {pathToAsm} -o {pathToBin}");
+            File.ReadAllBytes(pathToBin);
+            return true;
+        }
+        catch
+        {
+            File.Delete(pathToBin);
+            return false;
+        }
+    }
+    public virtual void Interpret()
+    {
+        Lexer lexer = new(File.ReadAllText(pathToCode));
+        List<Token> tokens = [];
+        while (true)
+        {
+            var token = lexer.Lex();
+            if(token==null)
+                continue;
+            if(token.type == TokenType.EOF_TOKEN)
+                break;
+            tokens.Add(token);
+        }
+        Parser parser = new Parser(tokens);
+        Interpreter interpreter = new Interpreter(parser.Parse());
+        var t = interpreter.Interpret();
+        File.WriteAllText(pathToAsm,t);
+    }
+    public virtual void DeleteBin()
+    {
+        File.Delete(pathToBin);
+    }
+}
+public class Bootloader : CompiledCode
+{
+    public Bootloader(string pathToCode, string pathToBin, string pathToAsm) : base(pathToCode, pathToBin, pathToAsm)
+    {
+    }
+    public override void Interpret()
+    {
         Interpreter.bootloader = true;
-        var bootloader = InterpretThis(input);
-        File.WriteAllText(asmfile,bootloader.output);
-
-    }
-    Interpreter InterpretThis(string path)
-    {
-        Lexer lexer = new Lexer(File.ReadAllText(path));
-        List<Token> tokens = [];
-        while (true)
-        {
-            var token = lexer.Lex();
-            if(token==null)
-                continue;
-            if(token.type == TokenType.EOF_TOKEN)
-                break;
-            tokens.Add(token);
-        }
-
-        var main = new ParseFunction(){name = "main"};
-
-        Parser parser = new Parser(tokens);
-        parser.Parse(main);
-
-        Interpreter interpreter = new Interpreter(main.ToFunc());
-        interpreter.Interpret();
-        return interpreter;
+        base.Interpret();
     }
 }
-class Kernel(string input,string asmfile,string output) : IDisposable
+public class Kernel : CompiledCode
 {
-    public string kernelBIN =>output;
-    public void Compile(){
-        ConCom.Run(@$"nasm -f bin {asmfile} -o {output}");
-        var s = File.ReadAllBytes(output);
-    }
-
-    public void Dispose()
+    public Kernel(string pathToCode, string pathToBin, string pathToAsm) : base(pathToCode, pathToBin, pathToAsm)
     {
-        File.Delete(output);
     }
-
-    public void Interpret(){
+    public override void Interpret()
+    {
         Interpreter.bootloader = false;
-        var bootloader = InterpretThis(input);
-        File.WriteAllText(asmfile,bootloader.output);
-
-    }
-    Interpreter InterpretThis(string path)
-    {
-        Lexer lexer = new Lexer(File.ReadAllText(path));
-        List<Token> tokens = [];
-        while (true)
-        {
-            var token = lexer.Lex();
-            if(token==null)
-                continue;
-            if(token.type == TokenType.EOF_TOKEN)
-                break;
-            tokens.Add(token);
-        }
-
-        var main = new ParseFunction(){name = "main"};
-
-        Parser parser = new Parser(tokens);
-        parser.Parse(main);
-
-        Interpreter interpreter = new Interpreter(main.ToFunc());
-        interpreter.Interpret();
-        return interpreter;
+        base.Interpret();
     }
 }

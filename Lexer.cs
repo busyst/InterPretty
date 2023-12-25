@@ -12,6 +12,8 @@ enum TokenType{
     OPEN_PAREN,
     CLOSE_PAREN,
     OPEN_BRACE,
+    OPEN_SQUARE_BRACE,
+    CLOSE_SQUARE_BRACE,
     CLOSE_BRACE,
     COLON,
     SEMICOLON,
@@ -86,6 +88,9 @@ class Lexer(string input)
             case '&':
                 Advance();
                 return CreateToken(TokenType.SPECIAL_SYMBOL, "&");
+            case '.':
+                Advance();
+                return CreateToken(TokenType.SPECIAL_SYMBOL, ".");
             case ',':
                 Advance();
                 return CreateToken(TokenType.SPECIAL_SYMBOL, ",");
@@ -101,6 +106,12 @@ class Lexer(string input)
             case '$':
                 Advance();
                 return CreateToken(TokenType.SPECIAL_SYMBOL, "$");
+            case '[':
+                Advance();
+                return CreateToken(TokenType.OPEN_SQUARE_BRACE, "");
+            case ']':
+                Advance();
+                return CreateToken(TokenType.CLOSE_SQUARE_BRACE, "");
             case '\'':
                 Advance();
                 char[] chars = new char[2];
@@ -111,8 +122,6 @@ class Lexer(string input)
                 }
                 Advance();
                 return CreateToken(TokenType.NUMBER,$"{(int)chars[0]}");
-            case '#':
-                return LexPreproces();
             default:
                 if (char.IsAsciiLetter(current) || current == '_') 
                     return LexName();
