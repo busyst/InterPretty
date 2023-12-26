@@ -1,6 +1,8 @@
 public class Variable
 {
     public bool array = false;
+    public bool changed = false;
+    public string defaultValue = "0";
     public string name;
     public VariableType type;
     public string StringType => VTToType(type);
@@ -58,5 +60,5 @@ public class Variable
 }
 public enum VariableType : byte
 {
-    BYTE,SHORT,INT,LONG
+    BYTE = 1,SHORT = 2,INT = 4,LONG = 8
 }

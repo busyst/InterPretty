@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.RegularExpressions;
 
 public static class IS
 {
@@ -28,6 +29,13 @@ class Interpreter(Class[] _classes)
             return data[_name];
         throw new ArgumentException($"Class \"{name}\" dont exist");
     }
+    private bool isVariable(string className,string name)
+    {
+        var _name = $"{className}_{name}";
+        if(data.ContainsKey(_name))
+            return true;
+        return false;
+    }
     private static bool isNumber(string s) =>char.IsNumber(s[0]);
     private void AddLine(string str) => main.AppendLine('\t' + str);
 
@@ -36,7 +44,7 @@ class Interpreter(Class[] _classes)
         var callingFrom = instruction.args[0];
         var type = Variable.VTFromString(instruction.args[1]);
         var name = callingFrom +'_'+ instruction.args[2];
-        data.Add(name,new Variable(){name = name,type = type});
+        data.Add(name,new Variable(){name = name,type = type,array = instruction.args[3]=="1"});
     }
     private void HandleOperation(Instruction instruction)
     {
@@ -56,6 +64,27 @@ class Interpreter(Class[] _classes)
                     var mxr = Variable.VTToPrimaryRegister(Variable.MaxReg(scv.type,variable.type));
                     AddLine($"mov {scv.StringType} {mxr}, [{scv.name}]");
                     AddLine($"mov {variable.StringType} [{variable.name}],{variable.StringType} {mxr}");
+                }
+                break;
+            default:
+                if(expresion[0].Length==0)
+                {
+                    if(!variable.array)
+                        throw new Exception($"You tried writing a array to \"{variable.name}\".");
+                    if(variable.changed)
+                        throw new Exception($"Arrays are static, dont change them.");
+                    // a = {...}
+                    var vals = expresion[1..^1];
+                    string def = "";
+                    for (int i = 0; i < vals.Length; i++)
+                    {
+                        def+=vals[i];
+                    }
+                    variable.defaultValue = def;
+                }
+                else
+                {
+                    // a = q - a;
                 }
                 break;
         }
@@ -125,6 +154,65 @@ class Interpreter(Class[] _classes)
             case "!=": AddLine($"je {jp}");  break;
         }
     }
+    private void HandleDirect(Instruction instruction)
+    {
+        string className = instruction.args[0];
+        string code = instruction.args[1].Trim();
+        string leadingWhitespacePattern = @"^[ \t]+";
+        string emptyStringReplacement = "";
+        RegexOptions multilineOptions = RegexOptions.Multiline;
+
+        // Remove leading whitespaces
+        string cleanedCode = Regex.Replace(code, leadingWhitespacePattern, emptyStringReplacement, multilineOptions);
+
+        var lines = cleanedCode.Split("\r\n");
+
+        void ProcessLine(int i)
+        {
+            string ModifyTextInBraces(string input)
+            {
+                // Define a regular expression pattern to match text within curly braces
+                string pattern = @"\{([^}]*)\}";
+
+                // Use Regex.Matches to find all matches in the input string
+                MatchCollection matches = Regex.Matches(input, pattern);
+
+                // Loop through each match and replace the text within curly braces
+                foreach (Match match in matches.Cast<Match>())
+                {
+                    string originalText = match.Value; // Text within curly braces
+                    string modifiedText = ModifyText(originalText); // Modify the text as needed
+                    input = input.Replace(originalText, modifiedText); // Replace original text with modified text
+                }
+
+                return input;
+            }
+            string ModifyText(string originalText)
+            {
+                var text = originalText[1..^1].Trim();
+                var shieeet = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var output = "";
+                for (int i1 = 0; i1 < shieeet.Length; i1++)
+                {
+                    string x = shieeet[i1];
+                    if (isVariable(className,x))
+                        output +=  GetVariable(className,x).name + (i1==shieeet.Length-1?"":" ");
+                    else
+                        output += x + (i1==shieeet.Length-1?"":" ");
+                }
+                return output;
+            }
+            lines[i] = ModifyTextInBraces(lines[i]);
+        }
+
+        // Process each line
+        for (int i = 0; i < lines.Length; i++)
+            ProcessLine(i);
+
+        // Add each processed line
+        foreach (var line in lines)
+            AddLine(line);
+    }
 
 
     public string Interpret()
@@ -158,6 +246,9 @@ class Interpreter(Class[] _classes)
                 case InstructionType.CONDITION:
                     HandleCondition(instruction);
                     break;
+                case InstructionType.DIRECT_CODE:
+                    HandleDirect(instruction);
+                    break;
                 default:
                     throw new Exception("Wrong instruction!");
             }
@@ -179,15 +270,15 @@ class Interpreter(Class[] _classes)
         AppendIfTrue(outputBuilder, bootloader, "[org 0x7C00]\n");
         AppendIfTrue(outputBuilder, true, $"[BITS {IS.Mode}]\n");
 
-        outputBuilder.AppendLine("section .data");
+        AppendIfTrue(outputBuilder,data.Count!=0,"section .data\n");
 
         foreach (var entry in data)
         {
-            outputBuilder.AppendLine($"  {entry.Key}:{entry.Value.StringShortType} 0");
+            outputBuilder.AppendLine($"  {entry.Key} {entry.Value.StringShortType} {entry.Value.defaultValue}");
         }
 
         outputBuilder.AppendLine("section .text");
-        outputBuilder.AppendLine("global _start");
+        outputBuilder.AppendLine("  global _start");
         outputBuilder.AppendLine("_start:");
         outputBuilder.Append(main);
 

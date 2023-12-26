@@ -126,7 +126,8 @@ class Parser(List<Token> tokens)
         ([TokenType.GOTO,TokenType.NAME,TokenType.SEMICOLON]),//goto a
         ([TokenType.IF,TokenType.OPEN_PAREN]),//if(...
         ([TokenType.NAME,TokenType.SPECIAL_SYMBOL,TokenType.NAME,TokenType.EQUAL]),        // A.a = ...
-        ([TokenType.NAME,TokenType.OPEN_SQUARE_BRACE,TokenType.CLOSE_SQUARE_BRACE,TokenType.NAME,TokenType.EQUAL]),        // A.a = ...
+        ([TokenType.NAME,TokenType.OPEN_SQUARE_BRACE,TokenType.CLOSE_SQUARE_BRACE,TokenType.NAME]),        // int[] a...
+        ([TokenType.ASMCODE]),        // asm{..
     ];
     private List<Instruction> Parse(ReadOnlySpan<Token> tokens,string className)
     {
@@ -166,7 +167,9 @@ class Parser(List<Token> tokens)
                     else if(j==8)
                         instructions.Add(Assign(i-(buffer.Count-1),tokens,className,ref i));
                     else if(j==9)
-                        instructions.Add(Assign(i-(buffer.Count-1),tokens,className,ref i));
+                        instructions.Add(VarCreate(i-(buffer.Count-1),tokens,className,ref i));
+                    else if(j==10)
+                        instructions.Add(AssemblerInsert(i-(buffer.Count-1),tokens,className,ref i));
                     buffer.Clear();
                 }
                 break;
@@ -175,6 +178,10 @@ class Parser(List<Token> tokens)
         return instructions;
     }
     private static uint UID = 0;
+    private Instruction AssemblerInsert(int start,ReadOnlySpan<Token> tokens,string className,ref int P)
+    {
+        return new Instruction(){instructionType = InstructionType.DIRECT_CODE,args = [className,tokens[start].lexeme]};
+    }
     private List<Instruction> Condition(int start,ReadOnlySpan<Token> tokens,string className,ref int P)
     {
         var label = $"_IJ{UID++}";
@@ -254,23 +261,25 @@ class Parser(List<Token> tokens)
     }
     private Instruction VarCreate(int start,ReadOnlySpan<Token> tokens,string className,ref int P)
     {
+        bool array = false;
         var type = tokens[start].lexeme;
+        if(tokens[start+1].type == TokenType.OPEN_SQUARE_BRACE)
+        {
+            start+=2;
+            array = true;
+        }
         var name = tokens[start+1].lexeme;
         if(tokens[start+2].type != TokenType.SEMICOLON)
         {
             P = start;
         }
-        return Instruction.CreateVariable(className,type,name);
+        return Instruction.CreateVariable(className,type,name,array?"1":"0");
     }
     private Instruction Assign(int start,ReadOnlySpan<Token> tokens,string className,ref int P)
     {
         if(tokens[start+1].type == TokenType.SPECIAL_SYMBOL) // A.a;
         {
             start+= 2;   
-        }
-        else if(tokens[start+1].type == TokenType.OPEN_SQUARE_BRACE) // int[] a;
-        {
-            start+=3;
         }
         var name = tokens[start].lexeme;
         int pointer = start + 2;
@@ -281,10 +290,10 @@ class Parser(List<Token> tokens)
             pointer++;
         }
         P+=expr.Count+1;
-        if((start-1)>=0&&tokens[start-1].type == TokenType.SPECIAL_SYMBOL)
-            return Instruction.AssignToVariable(className,tokens[start-2].lexeme,name,expr);
+        if ((start - 1) < 0 || tokens[start - 1].type != TokenType.SPECIAL_SYMBOL)
+            return Instruction.AssignToVariable(className, className, name, expr);
         else
-            return Instruction.AssignToVariable(className,className,name,expr);  
+            return Instruction.AssignToVariable(className, tokens[start - 2].lexeme, name, expr);
     }
 }
 internal class ClassPointer

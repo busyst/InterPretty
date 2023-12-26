@@ -1,9 +1,8 @@
 class kernel
 {
+    int a = 4;
     void Main()
     {
-        int[] chars = {'k','y','s'};
-        int a = 0x000;
-        int b = 0x100;
+        HelloWorld();
     }
 }

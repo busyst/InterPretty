@@ -19,6 +19,7 @@ enum TokenType{
     SEMICOLON,
     MODIFIER,
     PREPROCES,
+    ASMCODE,
     EOF_TOKEN
 };
 class Token
@@ -158,6 +159,27 @@ class Lexer(string input)
                 System.Console.WriteLine("Name is too long:{0}",buffer);
                 return CreateToken(TokenType.EOF_TOKEN, "");
             }
+        }
+        if(buffer=="asm")
+        {
+            var code = "";
+            SkipWhitespace();
+            Advance();
+            int braces = 1;
+            while (true)
+            {
+                var c = Advance();
+                if(c == '}')
+                {
+                    braces--;
+                    if(braces<=0)
+                        break;
+                }
+                else if(c=='{')
+                    braces++;
+                code+=c;
+            }
+            return CreateToken(TokenType.ASMCODE, code);
         }
         return buffer switch
         {

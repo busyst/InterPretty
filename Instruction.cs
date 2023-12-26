@@ -12,8 +12,8 @@ class Instruction
         }
         return ins;
     }
-    public static Instruction CreateVariable(string callingFrom,string type,string name) =>
-    new Instruction(){instructionType = InstructionType.CREATE_VARIABLE,args = [callingFrom,type,name]};
+    public static Instruction CreateVariable(string callingFrom,string type,string name,string array) =>
+    new Instruction(){instructionType = InstructionType.CREATE_VARIABLE,args = [callingFrom,type,name,array]};
     public static Instruction AssignToVariable(string callingFrom,string callingTo,string name,List<string> expresion)
     {
         var ins = new Instruction(){instructionType = InstructionType.OPERATION,args = [callingFrom,callingTo,name]};
@@ -45,4 +45,5 @@ enum InstructionType{
     CREATE_JP,
     CONDITION,
     JUMP_TO,
+    DIRECT_CODE,
 };
