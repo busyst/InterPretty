@@ -3,6 +3,6 @@ class kernel
     int a = 4;
     void Main()
     {
-        HelloWorld();
+        
     }
 }
