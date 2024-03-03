@@ -324,7 +324,7 @@ internal class FunctionPointer
 internal class Class
 {
     public readonly string name;
-    public Function[] functions= [];
+    public Function[] functions = [];
 
     public Class(string name)
     {

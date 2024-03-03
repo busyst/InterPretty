@@ -50,13 +50,13 @@ class Lexer(string input)
         switch (current) {
             case '+':
                 Advance();
-                return CreateToken(TokenType.PLUS, "");
+                return CreateToken(TokenType.PLUS, "+");
             case '-':
                 Advance();
-                return CreateToken(TokenType.MINUS, "");
+                return CreateToken(TokenType.MINUS, "-");
             case '*':
                 Advance();
-                return CreateToken(TokenType.MULTIPLY, "");
+                return CreateToken(TokenType.MULTIPLY, "*");
             case '/':
                 if(Peek()=='/')
                 {
@@ -64,7 +64,7 @@ class Lexer(string input)
                     return null;
                 }
                 Advance();
-                return CreateToken(TokenType.DIVIDE, "");
+                return CreateToken(TokenType.DIVIDE, "/");
             case '(':
                 Advance();
                 return CreateToken(TokenType.OPEN_PAREN, "");
@@ -85,6 +85,11 @@ class Lexer(string input)
                 return CreateToken(TokenType.SEMICOLON, "");
             case '=':
                 Advance();
+                if(Peek()=='=')
+                {
+                    Advance();
+                    return CreateToken(TokenType.SPECIAL_SYMBOL, "==");
+                }
                 return CreateToken(TokenType.EQUAL, "");
             case '&':
                 Advance();
@@ -179,7 +184,7 @@ class Lexer(string input)
                     braces++;
                 code+=c;
             }
-            return CreateToken(TokenType.ASMCODE, code);
+            return CreateToken(TokenType.ASMCODE, code.Trim());
         }
         return buffer switch
         {

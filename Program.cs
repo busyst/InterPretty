@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
-var terr = @"C:\Users\JD\Desktop\MKERSHARP\Generated\";
-var code = @"C:\Users\JD\Desktop\MKERSHARP\Code\";
+var terr = @".\Generated\";
+var code = @".\Code\";
 
 Bootloader bootloader = new Bootloader($"{code}bootloader.ams",$"{terr}bootloader.asm",$"{terr}bootloader.bin");
 // /bootloader.Interpret();
