@@ -1,24 +1,15 @@
 using System.Text;
 using System.Text.RegularExpressions;
-class Interpreter(Class[] _classes)
+class Interpreter(IEnumerable<Statement> statements)
 {
     public static bool bootloader = false;
     private readonly StringBuilder main = new StringBuilder();
     public string Interpret()
     {
-        var c = GetMain();
-        FunctionInterpreter functionInterpreter = new("_start",c.instructions);
+        FunctionInterpreter functionInterpreter = new("_start",statements);
         functionInterpreter.Parse();
         main.Append(functionInterpreter.GetCode());
         return GetCode();
-    }
-    private Function GetMain()
-    {
-        foreach (var _class in _classes)
-            foreach (var x in _class.functions)
-                if(x.name.Equals("main", StringComparison.CurrentCultureIgnoreCase))
-                    return x;
-        throw new Exception("There is no main method!");
     }
     private string GetCode()
     {
@@ -41,165 +32,153 @@ class Interpreter(Class[] _classes)
         return outputBuilder.ToString();
     }
 }
-class FunctionInterpreter(string name,IEnumerable<Instruction> instructions)
+class FunctionInterpreter(string name,IEnumerable<Statement> statements)
 {
     private ASMCOMM asmContext = new();
-    //16 bit registers
+
     private readonly StringBuilder main = new StringBuilder();
     private void AddLine(string str) => main.AppendLine('\t' + str);
-    private void HandleCreation(Instruction instruction)
+    private void HandleCreation(Statement statement)
     {
-        var callingFrom = instruction.args[0];
-        var type = Variable.VTFromString(instruction.args[1]);
-        var name = callingFrom +'_'+ instruction.args[2];
-        asmContext.AllocValue(name,type);
-    }
-    private void HandleOperation(Instruction instruction)
-    {
-        var callingFrom = instruction.args[0];
-        var callingTo = instruction.args[1];
-        var _name = instruction.args[2];
-        var expresion = instruction.args.AsSpan(3);
-
-        var name = callingFrom +'_'+ _name;
-        if(expresion.Length==1)
-        {
-            if(char.IsNumber(expresion[0][0]))
-                AddLine(asmContext.CopyValue(name,expresion[0]));
-            else
-            {
-                var op_name = callingTo +'_'+expresion[0];
-                AddLine(asmContext.CopyValue(name,op_name));
-            }
-        }
-        else if(expresion.Length==3)
-        {
-            string fo = char.IsNumber(expresion[0][0])?expresion[0]:callingFrom +'_'+expresion[0];
-            bool bfo = char.IsNumber(expresion[0][0]);
-            string so = char.IsNumber(expresion[2][0])?expresion[2]:callingFrom +'_'+expresion[2];
-            bool bso = char.IsNumber(expresion[2][0]);
-            if (!bfo)
-            {
-                fo = asmContext.LocalValue(fo);
-            }
-            AddLine($"mov ax, {fo}");
-            if(!bso)
-            {
-                so = asmContext.LocalValue(so);
-                AddLine($"mov dx, {so}");
-                so = "dx";
-            }
-            switch (expresion[1][0])
-            {
-                case '+':
-                    AddLine($"add ax, {so}");
-                    break;
-                case '-':
-                    AddLine($"sub ax, {so}");
-                    break;
-                case '*':
-                    AddLine($"imul ax, {so}");
-                    break;
-                default:
-                    break;
-            }
-            AddLine($"mov {fo}, ax");
-        }
-    }
-    private void HandleCondition(Instruction instruction)
-    {
-        var relClass = instruction.args[0];
-        var jp = $"{relClass}_C_{instruction.args[1]}";
-        var expr = instruction.args.AsSpan(2);
-        var op_name = relClass + '_' + expr[0];
-        
-        AddLine($"cmp word [bp-{asmContext.offsets[op_name]}],{expr[2]}");
-        switch (expr[1])
-        {
-            case "<":  AddLine($"jge {jp}"); break;
-            case ">":  AddLine($"jle {jp}"); break;
-            case "<=": AddLine($"jg {jp}");  break;
-            case ">=": AddLine($"jl {jp}");  break;
-            case "==": AddLine($"jne {jp}"); break;
-            case "!=": AddLine($"je {jp}");  break;
-        }
-    }
-    private void HandleDirect(Instruction instruction)
-    {
-        string className = instruction.args[0];
-        string code = instruction.args[1].Trim();
-        string regex = @"\{(.*?)\}";
-        var matches = Regex.Matches(code,regex);
-        foreach (Match x in matches)
-        {
-            string cap = (x).Value;
-            string val = (x).Value.AsSpan(1,x.Value.Length-2).ToString();
-            if (char.IsNumber(val[0]))
-            {
-                int startIndex = x.Index;
-                int length = x.Length;
-                code = code.Remove(startIndex, length).Insert(startIndex, val);
-            }
-            else
-            {
-                var name = className +'_'+ val;
-                int startIndex = x.Index;
-                int length = x.Length;
-                code = code.Remove(startIndex, length).Insert(startIndex, asmContext.LocalValue(name));
-            }
-
-        }
-        string[] lines = code.Split('\n');
-        StringBuilder sb = new StringBuilder();
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string line = lines[i];
-            string trimmedLine = line.Trim();
-            string tabbedLine = (i!=0?"\t":"") + trimmedLine;
-            if(i+1!=lines.Length)
-                sb.AppendLine(tabbedLine);
-            else
-                sb.Append(tabbedLine);
-        }
-        AddLine(sb.ToString());
+        var type = Variable.VTFromString(statement._1_statement[0].lexeme);
         System.Console.WriteLine();
+        if(statement.flag==1) // Array
+        {
+            asmContext.PreAllocArray(statement._1_statement[3].lexeme,type);
+            statement._1_statement = statement._1_statement.AsSpan(3).ToArray();
+            HandleOperation(statement);
+        }
+        else//Variable
+        {
+            asmContext.AllocValue(statement._1_statement[1].lexeme,type);
+            statement._1_statement = statement._1_statement.AsSpan(1).ToArray();
+            HandleOperation(statement);
+        }
+    }
+    private void HandleOperation(Statement statement)
+    {
+        var expression = statement._2_expresion;
+        if(expression.Length==0)
+            return;
+        string name = statement._1_statement[0].lexeme;
+        bool array = asmContext.arrays.Contains(name);
+        if(array&&statement._1_statement.Length>1)
+        {
+            var ind = statement._1_statement.AsMemory(2,statement._1_statement.Length-3);
+            // array[smt] = ...
+            if(!IsComplex(ind))
+            {
+                ExpresionSolver(expression,name+$"[{ind.Span[0].lexeme}]");
+                return;
+            }
+            throw new NotImplementedException();
+        }
+        else if(array)
+        {
+            // array = ...
+            int from = 0;
+            int c = 0;
+            List<ReadOnlyMemory<Token>> exprs = [];
+            for (int i = 0; i < expression.Length; i++)
+            {
+                if(c==0&&((expression[i].type==TokenType.SPECIAL_SYMBOL&&expression[i].lexeme==",")||i+1==expression.Length))
+                {
+                    exprs.Add(expression.AsMemory(from,i-from));
+                    from = i+1;
+                    i++;
+                }
+                else if(expression[i].type==TokenType.SPECIAL_SYMBOL&&expression[i].lexeme=="(")
+                    c++;
+                else if(expression[i].type==TokenType.SPECIAL_SYMBOL&&expression[i].lexeme=="(")
+                    c--;
+                
+            }
+            asmContext.AllocArray(name,exprs.Count);
+            for (int i = 0; i < exprs.Count; i++)
+            {
+                if(ExpresionSolver(exprs[i],name+$"[{i}]"))
+                {
+
+                }
+
+            }
+
+        }
+        else
+        {
+            // var = ...
+            if(ExpresionSolver(expression,name))
+            {
+
+            }
+        }
+    }
+
+    static bool IsComplex(ReadOnlyMemory<Token> tokens)
+    {
+        if(tokens.Length==1&&char.IsNumber(tokens.Span[0].lexeme[0]))
+            return false;
+
+        return true;
+
+    }
+    bool ExpresionSolver(ReadOnlyMemory<Token> tokens,string writeTo)
+    {
+        var toks = tokens.Span;
+        var operation = TokenType.EQUAL;
+        if(toks[0].type == TokenType.EQUAL)
+        {
+            toks = toks[1..];
+        }
+
+        if(toks.Length==0)
+            return false;
+        if(toks.Length==1)
+        {
+            AddLine(asmContext.CopyValue(writeTo,toks[0].lexeme));
+            return false;
+        }
+        System.Console.WriteLine();
+        return true;
+    }
+    private void HandleCondition(Statement statement)
+    {
+
+    }
+    private void HandleDirect(Statement statement)
+    {
+
     }
     public void Parse()
     {
-        Queue<Instruction> instructionBuffer;
-        instructionBuffer = new Queue<Instruction>(instructions);
-        while(instructionBuffer.Count!=0)
+        Queue<Statement> statementsBuffer;
+        statementsBuffer = new Queue<Statement>(statements);
+        while(statementsBuffer.Count!=0)
         {
-            var instruction = instructionBuffer.Dequeue();
-            switch (instruction.instructionType)
+            var statement = statementsBuffer.Dequeue();
+            switch (statement.type)
             {
-                case InstructionType.CREATE_VARIABLE:
-                    HandleCreation(instruction);
+                case StatementType.Declaration:
+                    HandleCreation(statement);
                     break;
-                case InstructionType.OPERATION:
-                    HandleOperation(instruction);
+                case StatementType.Assigment:
+                    HandleOperation(statement);
                     break;
-                case InstructionType.CONDITION:
-                    HandleCondition(instruction);
+                case StatementType.Condition:
+                    HandleCondition(statement);
                     break;
-                case InstructionType.CREATE_JP:
-                    HandleCJP(instruction);
+                case StatementType.CreateJumpPoint:
+                    HandleCJP(statement);
                     break;
-                case InstructionType.DIRECT_CODE:
-                    HandleDirect(instruction);
+                case StatementType.InsertASM:
+                    HandleDirect(statement);
                     break;
                 default:
                     throw new NotImplementedException("Wrong instruction!");
             }
         }
     }
-    private void HandleCJP(Instruction instruction)
-    {
-        string relClass = instruction.args[0];
-        string name = instruction.args[1];
-        AddLine($"{relClass}_C_{name}:");
-    }
+    private void HandleCJP(Statement statement) => AddLine($"{statement._1_statement[0].lexeme}:");
 
     public string GetCode()
     {
@@ -215,11 +194,32 @@ class FunctionInterpreter(string name,IEnumerable<Instruction> instructions)
 public class ASMCOMM
 {
     private int offset = 0;
+    public HashSet<string> arrays = [];
     public Dictionary<string,(int size,VariableType type)> offsets = [];
     public void AllocValue(string name, VariableType type)
     {
         offset+= (int)type;
         offsets.Add(name,(offset,type));
+}
+    public void PreAllocArray(string name, VariableType type)
+    {
+        offsets.Add(name,(-1,type));
+        arrays.Add(name);
+    }
+    public void AllocArray(string name,int size)
+    {
+        if(!offsets.ContainsKey(name))
+            throw new Exception("Using of non existing array. Fuck yourself.");
+        if(offsets[name].size!=-1)
+            throw new Exception("Reallocating existing array.");
+        VariableType type = offsets[name].type;
+        for (int i = 0; i < size; i++)
+        {
+            offsets.Add(name+$"[{i*((int)type)}]",(offset+i*((int)type),type));
+        }
+        offsets[name] = new (offset, type);
+        offset+= ((int)type) * size;
+   
     }
     public string LocalValue(string name)
     {
@@ -237,6 +237,20 @@ public class ASMCOMM
             else
                 return $"mov {LocalValue(to)},{what}";
         }
+
+        throw new Exception("Wha?");
+    }
+    public string Compare(string what1,string what2)
+    {
+        if(offsets.ContainsKey(what1)||offsets.ContainsKey(what2))
+        {
+            if(offsets.ContainsKey(what2))
+                return $"mov ax, {LocalValue(what1)}"+"\t"+$"cmp ax,{LocalValue(what2)}";
+            else
+                return $"cmp {LocalValue(what1)},{what2}";
+        }
+        else
+            return $"cmp {what1},{what2}";
 
         throw new Exception("Wha?");
     }

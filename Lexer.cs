@@ -1,4 +1,4 @@
-enum TokenType{
+public enum TokenType{
     NAME,
     NUMBER,
     EQUAL,
@@ -11,18 +11,19 @@ enum TokenType{
     GOTO,
     OPEN_PAREN,
     CLOSE_PAREN,
-    OPEN_BRACE,
+    OPEN_BRACKET,
     OPEN_SQUARE_BRACE,
     CLOSE_SQUARE_BRACE,
-    CLOSE_BRACE,
+    CLOSE_BRACKET,
     COLON,
     SEMICOLON,
     MODIFIER,
     PREPROCES,
     ASMCODE,
-    EOF_TOKEN
+    TYPE,
+    EOF_TOKEN,
 };
-class Token
+public class Token
 {
     public TokenType type;
     public string lexeme = string.Empty;
@@ -67,16 +68,16 @@ class Lexer(string input)
                 return CreateToken(TokenType.DIVIDE, "/");
             case '(':
                 Advance();
-                return CreateToken(TokenType.OPEN_PAREN, "");
+                return CreateToken(TokenType.OPEN_PAREN, "(");
             case ')':
                 Advance();
-                return CreateToken(TokenType.CLOSE_PAREN, "");
+                return CreateToken(TokenType.CLOSE_PAREN, ")");
             case '{':
                 Advance();
-                return CreateToken(TokenType.OPEN_BRACE, "");
+                return CreateToken(TokenType.OPEN_BRACKET, "{");
             case '}':
                 Advance();
-                return CreateToken(TokenType.CLOSE_BRACE, "");
+                return CreateToken(TokenType.CLOSE_BRACKET, "}");
             case ':':
                 Advance();
                 return CreateToken(TokenType.COLON, "");

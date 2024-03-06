@@ -1,13 +1,5 @@
-public class Variable
+public static class Variable
 {
-    public bool array = false;
-    public bool changed = false;
-    public string defaultValue = "0";
-    public string name;
-    public VariableType type;
-    public string StringType => VTToType(type);
-    public string StringShortType => VTToShortType(type);
-    
     public static VariableType VTFromString(string str) => str switch
     {
         "byte"=>VariableType.BYTE,
@@ -23,14 +15,6 @@ public class Variable
         VariableType.INT => "dword",
         VariableType.LONG => "qword",
         _ => throw new ArgumentException("Invalid variableType"),
-    };
-    public static bool isType(string str) => str switch
-    {
-        "byte"=>true,
-        "short"=>true,
-        "int"=>true,
-        "long"=>true,
-        _ => false,
     };
     public static string VTToShortType(VariableType variableType) => variableType switch
     {

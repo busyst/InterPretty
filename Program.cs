@@ -108,8 +108,10 @@ public abstract class CompiledCode
                 break;
             tokens.Add(token);
         }
-        Parser parser = new Parser(tokens);
-        Interpreter interpreter = new Interpreter(parser.Parse());
+        ParserV3 p = new ParserV3(tokens);
+        p.Parse();
+
+        Interpreter interpreter = new Interpreter(p.statements);
         var t = interpreter.Interpret();
         File.WriteAllText(pathToAsm,t);
     }
