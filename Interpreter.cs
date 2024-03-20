@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 class Interpreter(IEnumerable<Statement> statements)
 {
     public static bool bootloader = false;
-    private readonly StringBuilder main = new StringBuilder();
+    private readonly StringBuilder main = new();
     public string Interpret()
     {
         FunctionInterpreter functionInterpreter = new("_start",statements);
@@ -32,7 +32,8 @@ class Interpreter(IEnumerable<Statement> statements)
         return outputBuilder.ToString();
     }
 }
-class FunctionInterpreter(string name,IEnumerable<Statement> statements)
+
+partial class FunctionInterpreter(string name,IEnumerable<Statement> statements)
 {
     private ASMCOMM asmContext = new();
 
@@ -122,6 +123,152 @@ class FunctionInterpreter(string name,IEnumerable<Statement> statements)
         return true;
 
     }
+    enum LexemeType
+    {
+        VarName,Greater,Less,GreaterEqual,LessEqual,EqualEqual,Index,OpenParen,ClosedParen,Comma,Dot,Plus,Minus,Multiply,Module,Increment,Decrement,And,Or,Not,BitwiseAnd,BitwiseOr,BitwiseXor,BitwiseNot,ShiftLeft,ShiftRight
+    }
+    class InternalLexer
+    {
+        static int Precedence(LexemeType type)
+        {
+            return type switch
+            {
+                LexemeType.Multiply or LexemeType.Module => 3,
+                LexemeType.Plus or LexemeType.Minus => 2,
+                LexemeType.Less or LexemeType.LessEqual or LexemeType.Greater or LexemeType.GreaterEqual or LexemeType.EqualEqual => 1,
+                _ => 0,
+            };
+        }
+        public List<(LexemeType type,string lexeme)> ConvertToRPN(List<(LexemeType type,string lexeme)> tokens)
+        {
+            Stack<(LexemeType type,string lexeme)> operatorStack = new Stack<(LexemeType type,string lexeme)>();
+            List<(LexemeType type,string lexeme)> outputQueue = new List<(LexemeType type,string lexeme)>();
+
+            foreach (var token in tokens)
+            {
+                switch (token.type)
+                {
+                    case LexemeType.VarName:
+                        outputQueue.Add(token);
+                        break;
+                    case LexemeType.OpenParen:
+                        operatorStack.Push(token);
+                        break;
+                    case LexemeType.ClosedParen:
+                        while (operatorStack.Count > 0 && operatorStack.Peek().type != LexemeType.OpenParen)
+                        {
+                            outputQueue.Add(operatorStack.Pop());
+                        }
+                        if (operatorStack.Count == 0)
+                            throw new Exception("Mismatched parentheses");
+                        operatorStack.Pop(); // Discard the OpenParen
+                        break;
+                    default:
+                        while (operatorStack.Count > 0 && Precedence(token.type) <= Precedence(operatorStack.Peek().type))
+                        {
+                            outputQueue.Add(operatorStack.Pop());
+                        }
+                        operatorStack.Push(token);
+                        break;
+                }
+            }
+            while (operatorStack.Count > 0)
+                outputQueue.Add(operatorStack.Pop());
+
+            return outputQueue;
+        }
+        public List<(LexemeType type,string lexeme)> values = [];
+        public InternalLexer(ReadOnlyMemory<Token> tokens)
+        {
+            var span = tokens.Span;
+            for (int i = 0; i < span.Length; i++)
+            {
+                TokenType Peek(int forward)
+                {
+                    if((i+forward)>=tokens.Span.Length)
+                        return TokenType.EOF_TOKEN;
+                    else
+                        return tokens.Span[i+forward].type;
+                }
+                switch (span[i].type)
+                {
+                    case TokenType.NAME:
+                        if(Peek(1)== TokenType.OPEN_SQUARE_BRACE)
+                        {
+                            var r = CollectionUtils.CaptureUntil(span.ToArray(),i+2,x=>x.type==TokenType.CLOSE_SQUARE_BRACE);
+                            if(!IsComplex(r))
+                            {
+                                values.Add((LexemeType.VarName,span[i].lexeme+$"[{r[0].lexeme}]"));
+                                i+=3;
+                                break;
+                            }
+                            throw new NotImplementedException();
+                            System.Console.WriteLine();
+                            break;
+                        }
+                        values.Add((LexemeType.VarName,span[i].lexeme));
+                        break;
+                    case TokenType.NUMBER:
+                        values.Add((LexemeType.VarName,span[i].lexeme));
+                        break;
+                    case TokenType.SPECIAL_SYMBOL:
+                        var ss = span[i].lexeme;
+                        switch (ss)
+                        {
+                            case "==":
+                                values.Add((LexemeType.EqualEqual,""));
+                                break;
+                            default:
+                                throw new NotImplementedException($"{ss}");
+                        }
+                        break;
+                    case TokenType.OPEN_PAREN:
+                        values.Add((LexemeType.OpenParen,""));
+                        break;
+                    case TokenType.CLOSE_PAREN:
+                        values.Add((LexemeType.ClosedParen,""));
+                        break;
+                    
+                    default:
+                        throw new NotImplementedException($"{span[i].type}");
+                }
+            }
+            while (values.First().type == LexemeType.OpenParen && values.Last().type == LexemeType.ClosedParen)
+            {
+                values.RemoveAt(0);
+                values.RemoveAt(values.Count - 1);
+            }
+        }
+    }
+    bool StatementSolver(ReadOnlyMemory<Token> tokens,string addition)
+    {
+        InternalLexer internalLexer = new(tokens);
+        var c = new Queue<(LexemeType type,string lexeme)>(internalLexer.ConvertToRPN(internalLexer.values));
+        var stack = new Queue<(LexemeType type,string lexeme)>();
+        while (c.TryDequeue(out var result))
+        {
+            switch (result.type)
+            {
+                case LexemeType.VarName:
+                    stack.Enqueue(result);
+                    break;
+                case LexemeType.EqualEqual:
+                    if(stack.Count!=2)
+                        throw new Exception("Wrong argument count");
+                    var fo = stack.Dequeue().lexeme;
+                    var so = stack.Dequeue().lexeme;
+                    AddLine(asmContext.Compare(fo,so));
+
+                    if(c.Count==0) // Last
+                        AddLine($"jne {addition}");
+                    break;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+        
+        return false;
+    }
     bool ExpresionSolver(ReadOnlyMemory<Token> tokens,string writeTo)
     {
         var toks = tokens.Span;
@@ -130,7 +277,6 @@ class FunctionInterpreter(string name,IEnumerable<Statement> statements)
         {
             toks = toks[1..];
         }
-
         if(toks.Length==0)
             return false;
         if(toks.Length==1)
@@ -143,11 +289,32 @@ class FunctionInterpreter(string name,IEnumerable<Statement> statements)
     }
     private void HandleCondition(Statement statement)
     {
+        StatementSolver(statement._1_statement,statement._2_expresion[0].lexeme);
 
     }
     private void HandleDirect(Statement statement)
     {
+        var code = statement._1_statement[0].lexeme;
+        while (true)
+        {
+            var r = MyRegex().Match(code);
+            if(!r.Success)
+                break;
+            var ind = r.Index;
+            code = code.Remove(ind,r.Length);
+            code = code.Insert(ind,asmContext.LocalValue(r.ValueSpan[1..^1].ToString().Trim()));
+        }
 
+        string[] lines = code.Split('\n');
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            string trimmedLine = line.Trim();
+            string tabbedLine = (i==0?"":"\t") + trimmedLine;
+            sb.AppendLine(tabbedLine);
+        }
+        AddLine(sb.ToString());
     }
     public void Parse()
     {
@@ -185,11 +352,15 @@ class FunctionInterpreter(string name,IEnumerable<Statement> statements)
         StringBuilder outputBuilder = new StringBuilder();
         outputBuilder.AppendLine($"{name}:");
         outputBuilder.AppendLine("\tpush bp");
+        //outputBuilder.AppendLine("\tmov bp, sp");
         outputBuilder.Append(main);
         outputBuilder.AppendLine("\tpop bp");
         outputBuilder.AppendLine("\tret");
         return outputBuilder.ToString();
     }
+
+    [GeneratedRegex(@"\{(.+?)\}")]
+    private static partial Regex MyRegex();
 }
 public class ASMCOMM
 {
@@ -208,16 +379,16 @@ public class ASMCOMM
     }
     public void AllocArray(string name,int size)
     {
-        if(!offsets.ContainsKey(name))
+        if(!arrays.Contains(name))
             throw new Exception("Using of non existing array. Fuck yourself.");
         if(offsets[name].size!=-1)
             throw new Exception("Reallocating existing array.");
         VariableType type = offsets[name].type;
-        for (int i = 0; i < size; i++)
+        for (int i = size - 1; i >= 0; i--)
         {
-            offsets.Add(name+$"[{i*((int)type)}]",(offset+i*((int)type),type));
+            offsets.Add(name+$"[{i}]",(offset+i*((int)type),type));
         }
-        offsets[name] = new (offset, type);
+        offsets[name] = new ((size - 1)*((int)type), type);
         offset+= ((int)type) * size;
    
     }

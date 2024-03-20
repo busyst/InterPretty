@@ -44,11 +44,14 @@ public class ParserV3(List<Token> tokens)
         for (int i1 = 0; i1 < tokens.Count; i1++)
         {
             buffer.Add(tokens[i1]);
-            int stat = -1;
+            int stat = -1,hltCnt = 0;
             for (int j = 0; j < posibilities.Length; j++)
             {
-                if(buffer.Count!=posibilities[j].Length)
+                if(buffer.Count!=posibilities[j].Length){
+                    if(buffer.Count>=posibilities[j].Length)
+                        hltCnt++;
                     continue;
+                }
                 bool skip = false;
                 for (int g = 0; g < posibilities[j].Length; g++)
                 {
@@ -64,7 +67,10 @@ public class ParserV3(List<Token> tokens)
                 break;
             }
             if(stat==-1)
-                continue;
+                if(hltCnt<posibilities.Length-1)
+                    continue;
+                else
+                    throw new Exception("There is tokenization error!\r\n"+string.Join("\r\n",buffer.Select(x=>(x.type.ToString(),$"[{x.lexeme}]"))));
             i1++;
             var (type, expr) = statementsTypes[stat];
             List<Token> expression = [];
